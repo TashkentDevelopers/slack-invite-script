@@ -1,17 +1,21 @@
 function getMyHost() {
   // TODO: put your slack domain here
-  return "https://phillydev.slack.com";
+  return "https://tashkentdevelopers.slack.com";
 }
 
 function getToken() {
   // TODO: PUT YOUR TOKEN HERE
-  var token = 'fill_in_your_api_token';
+  var token = PropertiesService.getScriptProperties().getProperty('slack_token');
   return token;
 }
 
 function getSignupChannel() {
   // TODO: PUT THE CHANNEL YOU WANT TO SEND UPDATES INTO HERE
-  return '#signupform';
+  return '#newregistrations';
+}
+
+function onFormSubmit(e) {
+  readRows(e.range.getSheet());
 }
 
 /**
@@ -31,17 +35,20 @@ function readRows() {
   // 'Timestamp' 'What is your email address?' 'Invited by'
 
   Logger.log('Looking for rows with email but no invited by...');
-  for (var i = 0; i <= numRows - 1; i++) {
+  for (var i = 1; i <= numRows - 1; i++) {
     var row = values[i];
-    var email = row[1];
-    var invited = row[2];
+    var first_name = row[1];
+    var last_name = row[2];
+    var email = row[3];
+    var info = row[4];
+    var invited = row[5];
 
     if (!invited && email) {
       Logger.log('Inviting email=' + email);
 
-      var result = invite(email);
+      var result = invite(email, first_name, last_name);
       Logger.log(result);
-      sheet.getRange(i + 1, 3).setValue(result || 'scriptbot');
+      sheet.getRange(i + 1, 6).setValue(result || 'scriptbot');
 
       SpreadsheetApp.flush();
     }
@@ -53,14 +60,14 @@ function readRows() {
  * obscure the full email
  */
 function hideEmail(email) {
-  return email.replace(/(.+)@.+$/, '$1@redacted');
+  return email.replace(/(.+)@.+$/, '$1@***');
 }
 
 /**
  * Tell the signupform channel you invited someone. This is a provides a backup
  * if signup via API dies.
  */
-function sayInvited(email, inviteResponse) {
+function sayInvited(email, first_name, last_name, inviteResponse) {
   var message;
   var options;
   var payload = getPayload();
@@ -73,10 +80,10 @@ function sayInvited(email, inviteResponse) {
   }
 
   if (inviteResponse.ok === true) {
-    message = hideEmail(email) + ', Invited Successfully';
+    message = first_name + ' ' +last_name + ' (' + hideEmail(email) + ') - invited successfully';
   } else {
     message = 'Error Inviting: ' +
-      hideEmail(email) + ' Error:' + inviteResponse.error;
+      first_name + ' ' +last_name + ' (' + hideEmail(email) + ') Error:' + inviteResponse.error;
   }
 
   payload.channel = getSignupChannel();
@@ -127,7 +134,7 @@ function getPayload() {
  * and the channels you want the user to be added to.
  *
 */
-function invite(email) {
+function invite(email, first_name, last_name) {
   var options;
   var payload = getPayload();
   var result;
@@ -139,7 +146,9 @@ function invite(email) {
   }
 
   payload.email = email;
-  payload.channels = 'C03G04GL7,C03EC6Y8L';
+  payload.first_name = first_name;
+  payload.last_name = last_name;
+  //payload.channels = 'C03GEGQ30';
   payload.set_active = 'true';
   payload._attempts = '1';
 
@@ -153,7 +162,7 @@ function invite(email) {
   result = UrlFetchApp.fetch(url, options);
 
   if (result.getResponseCode() == 200) {
-    sayInvited(email, JSON.parse(result));
+    sayInvited(email, first_name, last_name, JSON.parse(result));
   }
 
   return result;
